@@ -62,6 +62,9 @@ Start:
     ld a, $0                        ; Zero ticks
     ld [Ticks], a
 
+    ld a, $1
+    ld [KeyState], a                ; Set direction to right
+
     call WaitVBlank                 ; Turn off LCD
     ld hl, rLCDC
     res LCDCF_ON_BIT, [hl]
@@ -108,8 +111,10 @@ Start:
     or e
     jr nz, .drawCoord
 
-    ; Main loop where snake is moving right
+    ; Main loop
 Loop:
+    call UpdateKeyState
+
     call WaitVBlank
 
     ld hl, Ticks
@@ -152,12 +157,32 @@ Loop:
     or e
     jr nz, .update
 
-    ; Update head
-    ; TODO: Replace with current direction
-    inc hl
-    inc hl
-    inc [hl]
+    ; Update first coordinate
+    ld a, [KeyState]
 
+    bit JOYPAD_UP_BIT, a
+    jr z, .testRight
+    ld hl, Coords
+    dec [hl]
+    jr .draw
+.testRight:
+    bit JOYPAD_RIGHT_BIT, a
+    jr z, .testDown
+    ld hl, Coords+1
+    inc [hl]
+    jr .draw
+.testDown:
+    bit JOYPAD_DOWN_BIT, a
+    jr z, .testLeft
+    ld hl, Coords
+    inc [hl]
+    jr .draw
+.testLeft:
+    bit JOYPAD_LEFT_BIT, a
+    jr z, .draw
+    ld hl, Coords+1
+    dec [hl]
+.draw:
     ; Draw updated first coordinate
     LoadWord Coords, b, c
     call GetTileAddress
@@ -188,12 +213,17 @@ GetTileAddress:
     pop bc
     ret
 
-; Return arrow keys state in register a
-ReadArrowKeys:
+; Read and store arrow key state
+; TODO: Store only one key press?
+UpdateKeyState:
     ld a, ~P1F_4
     ldh [rP1], a
     ldh a, [rP1]
     cpl                             ; Complement bits so that set bit indicates a pressed key
+    and $F
+    jr z, .return                   ; Update direction only if a key is set
+    ld [KeyState], a
+.return:
     ret
 
 ; Wait until start of next vblank
@@ -204,14 +234,10 @@ WaitVBlank:
     jr nz, WaitVBlank
     ret
 
-SECTION "Data", ROM0, ALIGN[4]
-BGColor:    DW ($1F << 10) | ($1F << 5) | $1F
-WormColor:  DW 0
-TmpData:    DB 1, 1, 1, 2, 1, 3
-
 SECTION "Variables", WRAM0[$C000]
 Variables:
-Length: DS 2
-Coords: DS 20 * 18 * 2
-Ticks:  DS 1
+Length:     DS 2
+Coords:     DS 20 * 18 * 2
+Ticks:      DS 1
+KeyState:   DS 1
 VariablesEnd:
