@@ -114,82 +114,99 @@ Start:
     ; Main loop
 Loop:
     call UpdateKeyState
-
     call WaitVBlank
 
-    ld hl, Ticks
+    ld hl, Ticks                    ; Increment tick counter
     inc [hl]
-
-    ld a, [Ticks]                   ; Update snake every nth frame
-    and a, TICK_DIVIDER
+    ld a, TICK_DIVIDER              ; Process every nth frame
+    and a, [hl]
     jr nz, Loop
 
-    ; Update coordinates
-    LoadWord Length, d, e           ; de = Loop counter (Length-1)
-    dec de
-    ld hl, Coords                   ; Get address to the last coordinate pair
-    add hl, de
-    add hl, de
-
-    ; Clear last coordinate
-    push hl
+    call GetLastCoordAddress        ; Clear the last coordinate
     LoadWordHLI b, c
     call GetTileAddress
     ld a, BG_TILE_INDEX
     ld [hl], a
-    pop hl
 
-    dec hl                          ; hl = Address to second last x-coordinate
-.update:
-    ld b, h                         ; bc = Address to next x-coordinate
-    ld c, l
-    inc bc
-    inc bc
-
-    ld a, [hl-]                     ; Replace next coordinate pair with current one
-    ld [bc], a
-    dec bc
-    ld a, [hl-]
-    ld [bc], a
-
-    dec de                          ; Loop
-    ld a, d
-    or e
-    jr nz, .update
-
-    ; Update first coordinate
+    LoadWord Coords, b, c           ; Get new head coordinate
     ld a, [KeyState]
 
     bit JOYPAD_UP_BIT, a
     jr z, .testRight
-    ld hl, Coords
-    dec [hl]
-    jr .draw
+    dec b
+    jr .endTest
 .testRight:
     bit JOYPAD_RIGHT_BIT, a
     jr z, .testDown
-    ld hl, Coords+1
-    inc [hl]
-    jr .draw
+    inc c
+    jr .endTest
 .testDown:
     bit JOYPAD_DOWN_BIT, a
     jr z, .testLeft
-    ld hl, Coords
-    inc [hl]
-    jr .draw
+    inc b
+    jr .endTest
 .testLeft:
     bit JOYPAD_LEFT_BIT, a
-    jr z, .draw
-    ld hl, Coords+1
-    dec [hl]
-.draw:
-    ; Draw updated first coordinate
-    LoadWord Coords, b, c
+    jr z, .endTest
+    dec c
+.endTest:
+    call UpdateCoords
+
+    LoadWord Coords, b, c           ; Draw updated first coordinate
     call GetTileAddress
     ld a, SNAKE_TILE_INDEX
     ld [hl], a
 
     jr Loop
+
+; Update snake coordinates
+; e.g. [(2, 2), (1, 2), (1, 1)]
+; with new head coordinate (3, 2)
+; -> [(3, 2), (2, 2), (1, 2)]
+;
+; b = New head y-coordinate
+; c = New head x-coordinate
+;
+; FIXME: Handle snake of length 1
+UpdateCoords:
+    ; Update tail
+    push bc                         ; Save head coordinates
+    call GetLastCoordAddress        ; hl = Address to the second last x-coordinate
+    dec hl
+    LoadWord Length, b, c           ; bc = Loop counter (Length-1)
+    dec bc
+.tail:
+    ld d, h                         ; de = Address to next x-coordinate
+    ld e, l
+    inc de
+    inc de
+
+    ld a, [hl-]                     ; Replace next coordinate pair with current one
+    ld [de], a
+    dec de
+    ld a, [hl-]
+    ld [de], a
+
+    dec bc                          ; Loop
+    ld a, b
+    or c
+    jr nz, .tail
+.head:
+    ; Update head
+    pop bc
+    StoreWord b, c, Coords
+    ret
+
+; Get address to last coordinate pair
+; Returns the address in hl
+; Overwrites bc
+GetLastCoordAddress:
+    LoadWord Length, b, c
+    dec bc
+    ld hl, Coords
+    add hl, bc
+    add hl, bc
+    ret
 
 ; Get address of a tile in tilemap
 ; b = y-coordinate
@@ -203,10 +220,8 @@ GetTileAddress:
     REPT 5                          ; Multiply y coordinate by 32 since each row consists of 32 tiles
     add hl, hl
     ENDR
-
     ld b, $0                        ; Add x coordinate
     add hl, bc
-
     ld bc, _SCRN0                   ; Add tilemap base address
     add hl, bc
 
