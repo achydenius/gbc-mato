@@ -53,11 +53,8 @@ SECTION "Code", ROM0[$150]
 Start:
     di                              ; Disable interrupts
 
-    StoreWord $0, $4, Length        ; Set length to 4
-    StoreWord $2, $3, Coords        ; Set coordinates to [(3, 2), (3, 1), (2, 1), (1, 1)]
-    StoreWord $1, $3, Coords+2
-    StoreWord $1, $2, Coords+4
-    StoreWord $1, $1, Coords+6
+    StoreWord $0, $1, Length        ; Set initial length to 1
+    StoreWord $8, $9, Coords        ; Set initial coordinate to center of screen
 
     ld a, $0                        ; Zero ticks
     ld [Ticks], a
@@ -170,8 +167,6 @@ Loop:
 ;
 ; b = New head y-coordinate
 ; c = New head x-coordinate
-;
-; FIXME: Handle snake of length 1
 UpdateCoords:
     ; Update tail
     push bc                         ; Save head coordinates
@@ -179,6 +174,9 @@ UpdateCoords:
     dec hl
     LoadWord Length, b, c           ; bc = Loop counter (Length-1)
     dec bc
+    ld a, b
+    or c
+    jr z, .head                     ; If length is one, update only head
 .tail:
     ld d, h                         ; de = Address to next x-coordinate
     ld e, l
