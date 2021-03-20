@@ -62,6 +62,8 @@ Start:
     ld a, $1
     ld [KeyState], a                ; Set direction to right
 
+    StoreWord $0, $1, Seed          ; Initialize random seed
+
     call WaitVBlank                 ; Turn off LCD
     ld hl, rLCDC
     res LCDCF_ON_BIT, [hl]
@@ -265,6 +267,24 @@ CreateSolidTile:
     jr nz, .setPixelRow
     ret
 
+; Generate a 8-bit pseudo-random number
+; Source: http://www.z80.info/pseudo-random.txt
+; Returns the number in a
+Random:
+    ld a, [Seed]
+    ld b, a
+
+    rrca
+    rrca
+    rrca
+    xor $1F
+
+    add a, b
+    sbc a, $FF
+
+    ld [Seed], a
+    ret
+
 ; Wait until start of next vblank
 ; Overwrites a
 WaitVBlank:
@@ -277,6 +297,8 @@ SECTION "Variables", WRAM0[$C000]
 Variables:
 Length:     DS 2
 Coords:     DS 20 * 18 * 2
-Ticks:      DS 1
+Food:       DS 2
+Ticks:      DS 2
 KeyState:   DS 1
+Seed:       DS 2
 VariablesEnd:
