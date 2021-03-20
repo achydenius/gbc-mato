@@ -70,24 +70,28 @@ Start:
     res LCDCF_ON_BIT, [hl]
 
     ld a, BCPSF_AUTOINC
-    ldh [rBCPS], a                  ; Set first palette color to white
+    ldh [rBCPS], a                  ; Set first palette color to white,
     ld a, $FF
     ld [rBCPD], a
     ld a, $7F
     ld [rBCPD], a
-    xor a, a                        ; and second palette color to black
+    xor a, a                        ; second palette color to black
     ld [rBCPD], a
+    ld [rBCPD], a
+    ld a, $1F                       ; and third color to red
+    ld [rBCPD], a
+    ld a, $0
     ld [rBCPD], a
 
-    ld b, $8                        ; Set second tile's all pixels to second color
-    ld hl, _VRAM+$10
-.setPixelRow
-    ld a, $FF
-    ld [hl+], a
-    ld a, $0
-    ld [hl+], a
-    dec b
-    jr nz, .setPixelRow
+    ld b, $FF                       ; Set second tile's all pixels to second color
+    ld c, $0
+    ld d, $1
+    call CreateSolidTile
+
+    ld b, $0                        ; and third tile's to third color
+    ld c, $FF
+    ld d, $2
+    call CreateSolidTile
 
     ld hl, rLCDC                    ; Turn on LCD
     set LCDCF_ON_BIT, [hl]
@@ -239,6 +243,28 @@ UpdateKeyState:
     jr z, .return                   ; Update direction only if a key is set
     ld [KeyState], a
 .return:
+    ret
+
+; b = First bit plane value
+; c = Second bit plane value
+; d = Tile number
+; Overwrites a, hl
+CreateSolidTile:
+    ld h, $0
+    ld l, d
+    REPT 4
+    add hl, hl
+    ENDR
+    ld de, _VRAM
+    add hl, de
+    ld d, $8
+.setPixelRow
+    ld a, b
+    ld [hl+], a
+    ld a, c
+    ld [hl+], a
+    dec d
+    jr nz, .setPixelRow
     ret
 
 ; Wait until start of next vblank
